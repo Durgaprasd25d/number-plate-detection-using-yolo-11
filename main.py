@@ -4,13 +4,16 @@ from paddleocr import PaddleOCR
 import numpy as np
 from server import manage_numberplate_db
 import cvzone
+from datetime import datetime
+
 # Initialize PaddleOCR
 ocr = PaddleOCR()
-cap = cv2.VideoCapture('tc.mp4')
+cap = cv2.VideoCapture('tc.mp4')  # Path to the video file
 model = YOLO("best_float32.tflite")
+
+# Load class names
 with open("coco1.txt", "r") as f:
     class_names = f.read().splitlines()
-
 
 # Function to perform OCR on an image array
 def perform_ocr(image_array):
@@ -22,7 +25,7 @@ def perform_ocr(image_array):
     detected_text = []
 
     # Process OCR results
-    if results[0] is not None:
+    if results:
         for result in results[0]:
             text = result[1][0]
             detected_text.append(text)
@@ -30,31 +33,17 @@ def perform_ocr(image_array):
     # Join all detected texts into a single string
     return ''.join(detected_text)
 
-# Mouse callback function to print mouse position
-def RGB(event, x, y, flags, param):
-    if event == cv2.EVENT_MOUSEMOVE:
-        point = [x, y]
-        print(point)
-
-cv2.namedWindow('RGB')
-cv2.setMouseCallback('RGB', RGB)
-
 # Initialize video capture and YOLO model
-count = 0
-area = [(5, 180), (3, 249), (984, 237), (950, 168)]
 counter = []
+area = [(5, 180), (3, 249), (984, 237), (950, 168)]
 
 while True:
     ret, frame = cap.read()
     if not ret:
         break
-#    count += 1
-#    if count % 3 != 0:
-#        continue
 
     frame = cv2.resize(frame, (1020, 500))
-    # Run YOLOv8 tracking on the frame
-    results = model.track(frame, persist=True,imgsz=240)
+    results = model.track(frame, persist=True, imgsz=240)
 
     # Check if there are any boxes in the results
     if results[0].boxes is not None and results[0].boxes.id is not None:
@@ -64,36 +53,33 @@ while True:
         confidences = results[0].boxes.conf.cpu().tolist()  # Confidence score
 
         for box, class_id, track_id, conf in zip(boxes, class_ids, track_ids, confidences):
-            c = class_names[class_id]
-            x1, y1, x2, y2 = box
-            cx=int(x1+x2)//2
-            cy=int(y1+y2)//2
-#            cv2.circle(frame,(cx,cy),4,(255,0,0),-1)
-#            cvzone.putTextRect(frame,f'{track_id}',(x1,y1),1,1)
-#            cv2.rectangle(frame,(x1,y1),(x2,y2),(0,255,0),2)
-            
-            result = cv2.pointPolygonTest(np.array(area, np.int32), ((cx, cy)), False)
-            if result >= 0:
-                if track_id not in counter:
-                    
+            if class_names[class_id] == "numberplate":  # Ensure it's a number plate
+                x1, y1, x2, y2 = box
+                cx = (x1 + x2) // 2
+                cy = (y1 + y2) // 2
+                
+                result = cv2.pointPolygonTest(np.array(area, np.int32), (cx, cy), False)
+                if result >= 0 and track_id not in counter:
                     counter.append(track_id)  # Only add if it's a new track ID
-        
+
                     crop = frame[y1:y2, x1:x2]
                     crop = cv2.resize(crop, (120, 70))
                     
-                    
                     text = perform_ocr(crop)
-                    print(text)
-                    text = text.replace('(', '').replace(')', '').replace(',', '').replace(']', '').replace('-', ' ')
+                    text = text.replace('(', '').replace(')', '').replace(',', '').replace(']', '').replace('-', ' ').strip()
                     
-#                    manage_numberplate_db(text)
-    mycounter=len(counter)               
-    cvzone.putTextRect(frame,f'{mycounter}',(50,60),1,1)
+                    if text:  # Only manage if text is not empty
+                        timestamp = datetime.now()
+                        manage_numberplate_db(text, timestamp)
+
+    mycounter = len(counter)               
+    cvzone.putTextRect(frame, f'{mycounter}', (50, 60), 1, 1)
     cv2.polylines(frame, [np.array(area, np.int32)], True, (255, 0, 0), 2)
     cv2.imshow("RGB", frame)
-    if cv2.waitKey(0) & 0xFF == 27:  # Press 'Esc' to exit
+
+    if cv2.waitKey(1) & 0xFF == 27:  # Press 'Esc' to exit
         break
 
-# Close video capture and MySQL connection
+# Close video capture
 cap.release()
 cv2.destroyAllWindows()

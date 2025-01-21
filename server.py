@@ -1,7 +1,7 @@
 from pymongo import MongoClient
 from datetime import datetime
 
-def manage_numberplate_db(numberplate):
+def manage_numberplate_db(numberplate, timestamp):
     """Connect to MongoDB, create database, create collection, insert number plate, and fetch data."""
 
     # MongoDB connection string
@@ -15,30 +15,21 @@ def manage_numberplate_db(numberplate):
         client = MongoClient(connection_string)
         print("Connection to MongoDB Server successful")
 
-        # Step 2: Access the database (it will be created if it doesn't exist)
+        # Step 2: Access the database
         db = client[database_name]
 
-        # Step 3: Access the collection (it will be created if it doesn't exist)
+        # Step 3: Access the collection
         collection = db[collection_name]
 
         # Step 4: Insert data into the collection
-        current_date = datetime.now().date()  # Get current date
-        current_time = datetime.now().time()  # Get current time
         data = {
             "numberplate": numberplate,
-            "entry_date": str(current_date),
-            "entry_time": str(current_time)
+            "timestamp": timestamp.strftime("%Y-%m-%d %H:%M:%S")  # Format timestamp
         }
 
         print("Inserting data into the collection...")
         collection.insert_one(data)
         print("Data inserted successfully")
-
-        # Step 5: Retrieve and display data from the collection
-        print("Fetching data from the collection...")
-        result = collection.find()
-        for document in result:
-            print(document)
 
     except Exception as e:
         print(f"Error: {e}")
@@ -47,6 +38,3 @@ def manage_numberplate_db(numberplate):
         # Close the connection
         client.close()
         print("MongoDB connection is closed")
-
-# Example usage
-# manage_numberplate_db("ABC-1234")
