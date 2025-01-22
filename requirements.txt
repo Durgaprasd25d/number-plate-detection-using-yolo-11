@@ -3,3 +3,4 @@ ultralytics
 paddleocr
 numpy
 cvzone
+matplotlib 
